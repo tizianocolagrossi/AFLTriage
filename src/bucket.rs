@@ -135,12 +135,47 @@ fn bucket_n_frames_raw(einfo: &EnrichedTriageInfo, n: usize) -> (String, Vec<Str
     (format!("{:x}", hash.compute()), inputs)
 }
 
+fn function_is_blacklisted(name: &Option<String>) -> bool{
+    let blacklist = 
+        vec![ "__sanitizer"
+            , "__asan"
+            , "__libafl_targets"
+            , "__pthread_kill"
+            , "__GI_abort"
+            , "__GI_raise"
+            ];
+
+    let is_blacklisted = match name {
+        Some(function_name) => {
+            let mut test = false;
+            for blacked in blacklist{
+                test |= function_name.contains(blacked);
+            }
+            test
+        },
+        None => false
+        
+    };
+
+    is_blacklisted
+}
+
 /// Get frame signatures (file:line, module+offset, or address) starting from the guessed faulting
 /// frame, or if not available, the first true frame
 fn get_frame_signatures(einfo: &EnrichedTriageInfo) -> Vec<String> {
     let mut inputs = vec![];
 
     for fr in &einfo.faulting_thread.frames[einfo.faulting_frame_idx..] {
+        // println!("[I]: {:?}", fr.symbol);
+        
+        let is_blacklisted = match &fr.symbol {
+            Some(symbol) => {
+                function_is_blacklisted(&symbol.function_name)
+            },
+            None => false
+        };
+        if is_blacklisted {continue;}
+
         let file_sym = match &fr.symbol {
             Some(symbol) => symbol.format_file(),
             None => "".to_string(),
