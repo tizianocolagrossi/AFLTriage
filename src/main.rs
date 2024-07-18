@@ -319,6 +319,18 @@ fn triage_test_case(
 
     // Whether to pass a file in via GDB stdin
     let input_file = if input_stdin { Some(testcase) } else { None };
+    
+
+    let file_path = Path::new(testcase);
+    let basename = file_path.file_name().expect("Error on get filename from input file");
+    let basename = basename.to_str().expect("Error getting string from slice");
+    let metdata_basename = format!(".{}.metadata", basename);
+    let parent_dir = file_path.parent().expect("Error getting parent from path");
+    let path = parent_dir.join(metdata_basename);
+    let metadata_path = match path.exists() {
+        true => Some(path),
+        _ => None,
+    };
 
     let triage_result: GdbTriageResult =
         match gdb.triage_program(&prog_args, input_file, debug, timeout_ms) {
