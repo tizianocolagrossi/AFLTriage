@@ -113,8 +113,9 @@ fn build_text_report(einfo: &EnrichedTriageInfo, envelope: &ReportEnvelope) -> T
     let mut child_output = TextReportSection::new("".into());
 
     header.add_line(format!(
-        "Summary: {}\nCommand line: {}\nTestcase: {}\nCrash bucket: {}",
+        "Summary: {}\nCommand line: {}\nTestcase: {}\nCrash bucket: {}\nFaulting execution number: {}",
         einfo.summary, shell_join(&envelope.command_line), shlex::quote(&envelope.testcase), envelope.bucket.strategy_result,
+        envelope.faulting_execution_number
     ));
 
     build_register_info(einfo, &mut register_info);

@@ -152,6 +152,7 @@ pub struct EnrichedTriageInfo {
     pub faulting_function: String,
     /// The thread that caused a fault leading to the target being stopped
     pub faulting_thread: EnrichedThreadInfo,
+    pub faulting_execution_number: u64,
     /// Sanitizer reports extracted from the target output in reverse order (most recent first)
     /// Currently only the last report is extracted.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -232,6 +233,8 @@ pub fn enrich_triage_info(opt: &ReportOptions, triage_result: &GdbTriageResult) 
         }
     }
 
+    let faulting_execution_number = triage_result.execution;
+
     Ok(EnrichedTriageInfo {
         summary,
         terse_summary,
@@ -239,6 +242,7 @@ pub fn enrich_triage_info(opt: &ReportOptions, triage_result: &GdbTriageResult) 
         faulting_frame_idx,
         faulting_function,
         faulting_thread,
+        faulting_execution_number,
         sanitizer_reports,
         target_output,
     })

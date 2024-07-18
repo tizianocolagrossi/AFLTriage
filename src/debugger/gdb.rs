@@ -30,7 +30,9 @@
 //! output. AFLTriage uses some tricks to delimit the output appropriately, avoiding the need to
 //! create a dedicated PTY for GDB.
 use serde::{Deserialize, Serialize};
-use std::io::{ErrorKind, Write};
+use serde_json::from_str;
+use std::fs::File;
+use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::os::unix::process::ExitStatusExt;
@@ -272,6 +274,7 @@ pub struct GdbJsonResult {
 pub struct GdbTriageResult {
     pub response: GdbJsonResult,
     pub child: GdbChildOutput,
+    pub execution: u64,
 }
 
 /// The target's output strings
@@ -501,11 +504,30 @@ impl GdbTriager {
         input_file: Option<&str>,
         show_raw_output: bool,
         timeout_ms: u64,
+        metadata_path: Option<PathBuf>,
     ) -> Result<GdbTriageResult, GdbTriageError> {
         let triage_script_path = if let GdbTriageScript::Internal(tf) = &self.triage_script {
             tf.path()
         } else {
             panic!("Unsupported triage script path")
+        };
+
+        let execution_where_found = match metadata_path {
+            Some(metadata_path) => {
+                let file = File::open(metadata_path).unwrap();
+                let reader = BufReader::new(file);
+                let mut found_at = 0xFFFFFFFFFFFFFFFF;
+                for line in reader.lines() {
+                    let lline = line.unwrap();
+                    if lline.clone().contains("executions") {
+                        let number = lline.split(": ").last().unwrap_or_default().trim().trim_end_matches(',');
+                        found_at = from_str::<u64>(number).unwrap();
+                        break;
+                    }
+                }
+                found_at
+            },
+            None => 0xFFFFFFFFFFFFFFFF
         };
 
         let gdb_run_command = match input_file {
@@ -660,6 +682,7 @@ impl GdbTriager {
                     stdout: child_output_stdout,
                     stderr: child_output_stderr,
                 },
+                execution: execution_where_found,
             }),
             Err(e) => Err(GdbTriageError::new(
                 GdbTriageErrorKind::Command,

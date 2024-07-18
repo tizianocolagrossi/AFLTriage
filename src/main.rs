@@ -190,11 +190,13 @@ fn setup_command_line() -> ArgMatches<'static> {
 
 /// State shared between all triage threads
 struct TriageState {
+    crashed_update: usize,
     crashed: usize,
     no_crash: usize,
     timedout: usize,
     errored: usize,
     crash_signature: HashSet<String>,
+    crash_found_exections: HashMap<String, u64>,
     unique_errors: HashMap<GdbTriageError, usize>,
 }
 
@@ -211,6 +213,7 @@ enum TriageResult {
 pub struct ReportEnvelope {
     command_line: Vec<String>,
     testcase: String,
+    faulting_execution_number: u64,
     debugger: String,
     //env: Vec<String>,
     bucket: CrashBucketInfo,
@@ -333,7 +336,7 @@ fn triage_test_case(
     };
 
     let triage_result: GdbTriageResult =
-        match gdb.triage_program(&prog_args, input_file, debug, timeout_ms) {
+        match gdb.triage_program(&prog_args, input_file, debug, timeout_ms, metadata_path) {
             Ok(triage_result) => triage_result,
             Err(e) => {
                 if e.error_kind == GdbTriageErrorKind::Timeout {
@@ -901,11 +904,13 @@ fn main_wrapper() -> i32 {
     write_message(format!("Processing initial {} test cases", job_count), None);
 
     let state = Arc::new(Mutex::new(TriageState {
+        crashed_update: 0,
         crashed: 0,
         no_crash: 0,
         errored: 0,
         timedout: 0,
         crash_signature: HashSet::new(),
+        crash_found_exections: HashMap::new(),
         unique_errors: HashMap::new(),
     }));
 
@@ -961,14 +966,20 @@ fn main_wrapper() -> i32 {
                     bucket_info.strategy_result.to_string()
                 };
 
-                if !state.crash_signature.contains(&bucket) {
+                if !state.crash_signature.contains(&bucket) 
+                ||  state.crash_found_exections.get(&bucket).is_some_and(|x| x > &etriage.faulting_execution_number) {
+
+                    state.crashed_update += 1;
+                    
                     state.crash_signature.insert(bucket.to_string());
+                    state.crash_found_exections.insert(bucket.to_string(), etriage.faulting_execution_number);
 
                     write_message(format!("{}", etriage.summary), Some(path));
 
                     let envelope = ReportEnvelope {
                         command_line: binary_args.iter().map(|x| x.to_string()).collect(),
                         testcase: path.to_string(),
+                        faulting_execution_number: etriage.faulting_execution_number,
                         debugger: gdb.gdb_path.to_string(),
                         bucket: bucket_info,
                         report_options: report_options.clone(),
@@ -1068,9 +1079,10 @@ fn main_wrapper() -> i32 {
     let total = all_testcases.len();
 
     log::info!(
-        "Triage stats [Crashes: {} (unique {}), No crash: {}, Timeout: {}, Errored: {}]",
+        "Triage stats [Crashes: {} (unique {}), Update: {}, No crash: {}, Timeout: {}, Errored: {}]",
         state.crashed,
         state.crash_signature.len(),
+        state.crashed_update,
         state.no_crash,
         state.timedout,
         state.errored
