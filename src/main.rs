@@ -46,6 +46,7 @@ use is_executable::IsExecutable;
 use rayon::prelude::*;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use core::fmt;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::{Path, PathBuf};
@@ -201,6 +202,7 @@ struct TriageState {
 }
 
 /// The result of a triage operation
+#[derive(Debug)]
 enum TriageResult {
     NoCrash(GdbChildOutput),
     Crash(GdbTriageResult),
@@ -209,7 +211,7 @@ enum TriageResult {
 }
 
 /// Metadata for a report that can act as a wrapper around data from a debugger
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(PartialEq, Serialize, Deserialize)]
 pub struct ReportEnvelope {
     command_line: Vec<String>,
     testcase: String,
@@ -220,6 +222,13 @@ pub struct ReportEnvelope {
     report_options: ReportOptions,
 }
 
+impl fmt::Debug for ReportEnvelope {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ReportEnvelope\n\tcommand_line: {:?}\n\ttestcase: {:?}\n\tfaulting_execution_number: {:?}\n\tdebugger: {:?}\n\tbucket: {:?}\n\treport_options: {:?}",
+        self.command_line, self.testcase, self.faulting_execution_number, self.debugger, self.bucket, self.report_options)
+    }
+}
+
 /// A fully stringified report ready to be written to an output
 struct RenderedReport {
     data: String,
@@ -227,15 +236,28 @@ struct RenderedReport {
     extension: &'static str,
 }
 
+impl fmt::Debug for RenderedReport {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "RenderedReport\n\tdata: {:?}\n\tformat: {:?}\n\textension: {:?}\n\n",self.data, self.format, self.extension)
+    }
+}
+
 /// Options controlling the output of reports
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReportOptions {
     pub show_child_output: bool,
     pub child_output_lines: usize,
 }
 
+impl fmt::Debug for ReportOptions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ReportOptions\n\tshow_child_output: {:?}\n\tchild_output_lines: {:?}\n\n",self.show_child_output, self.child_output_lines)
+    }
+}
+
 /// Data collected during the profiling of a target to triage crashes against
 #[allow(dead_code)]
+#[derive(Debug)]
 struct ProfileResult {
     process_result: std::io::Result<ChildResult>,
     process_execution_time: Duration,
